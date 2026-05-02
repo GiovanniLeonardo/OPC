@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>OPC Inventory Sync</title>
+    <style>
+        .glass { background: rgba(31, 41, 55, 0.8); backdrop-filter: blur(12px); }
+        .saving { pointer-events: none; opacity: 0.5; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4">
+
+    <div class="max-w-md mx-auto">
+        <div class="text-center mb-6 mt-4">
+            <h1 class="text-3xl font-black text-white italic">OPC<span class="text-blue-500">SYNC</span></h1>
+            <p class="text-slate-400 text-[10px] uppercase tracking-widest">Live Sheet Integration</p>
+        </div>
+
+        <div id="inventory-list" class="space-y-6"></div>
+    </div>
+
+    <script>
+        // PASTE YOUR GOOGLE WEB APP URL HERE
+        const scriptURL = 'YOUR_GOOGLE_WEB_APP_URL_HERE';
+
+        const inventoryData = [
+            { name: "Cassette", initial: 16 },
+            { name: "Perfusate", initial: 19 }
+        ];
+
+        function getStatus(stock) {
+            if (stock > 10) return { label: "In Stock", color: "text-green-400", bg: "bg-green-500/10" };
+            if (stock > 0) return { label: "Low Stock", color: "text-yellow-400", bg: "bg-yellow-400/10" };
+            return { label: "Out of Stock", color: "text-red-500", bg: "bg-red-500/10" };
+        }
+
+        async function syncToSheet(index) {
+            const card = document.getElementById(`card-${index}`);
+            const added = parseFloat(document.getElementById(`add-${index}`).value) || 0;
+            const used = parseFloat(document.getElementById(`used-${index}`).value) || 0;
+            const newStock = (inventoryData[index].initial + added) - used;
+
+            card.classList.add('saving');
+            
+            try {
+                await fetch(scriptURL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Required for Google Scripts
+                    cache: 'no-cache',
+                    body: JSON.stringify({ name: inventoryData[index].name, newStock: newStock })
+                });
+                
+                // Update UI visually
+                document.getElementById(`stock-${index}`).innerText = newStock;
+                const status = getStatus(newStock);
+                const statusEl = document.getElementById(`status-${index}`);
+                statusEl.innerText = status.label;
+                statusEl.className = `px-3 py-1 rounded-full text-[10px] font-bold uppercase ${status.color} ${status.bg} border border-current`;
+                
+                alert(`Updated ${inventoryData[index].name} to ${newStock}`);
+            } catch (error) {
+                alert("Error connecting to Google Sheets");
+            } finally {
+                card.classList.remove('saving');
+            }
+        }
+
+        function renderApp() {
+            const container = document.getElementById('inventory-list');
+            inventoryData.forEach((item, index) => {
+                const status = getStatus(item.initial);
+                container.innerHTML += `
+                    <div id="card-${index}" class="glass border border-slate-700 rounded-[2rem] p-6 shadow-2xl transition-all">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-2xl font-black text-white">${item.name}</h3>
+                            <span id="status-${index}" class="px-3 py-1 rounded-full text-[10px] font-bold uppercase ${status.color} ${status.bg} border border-current">
+                                ${status.label}
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div class="bg-slate-800/50 p-4 rounded-2xl">
+                                <label class="block text-[10px] font-bold text-blue-400 uppercase mb-2">Add Stock</label>
+                                <input type="number" id="add-${index}" placeholder="0" class="w-full bg-transparent border-b border-slate-600 text-xl text-white outline-none">
+                            </div>
+                            <div class="bg-slate-800/50 p-4 rounded-2xl">
+                                <label class="block text-[10px] font-bold text-red-400 uppercase mb-2">Used Cases</label>
+                                <input type="number" id="used-${index}" placeholder="0" class="w-full bg-transparent border-b border-slate-600 text-xl text-white outline-none">
+                            </div>
+                        </div>
+
+                        <button onclick="syncToSheet(${index})" class="w-full bg-blue-600 py-3 rounded-xl font-bold uppercase tracking-widest text-sm mb-4 active:bg-blue-700">Update Sheet</button>
+
+                        <div class="flex justify-between items-end px-2">
+                            <p class="text-[10px] font-bold text-slate-500 uppercase leading-tight">Live in<br>Sheet:</p>
+                            <p id="stock-${index}" class="text-4xl font-black text-white leading-none">${item.initial}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        renderApp();
+    </script>
+</body>
+</html>
