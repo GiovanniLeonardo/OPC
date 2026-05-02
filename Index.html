@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>OPC Inventory Tracker</title>
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .glass { background: rgba(31, 41, 55, 0.8); backdrop-filter: blur(12px); }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased p-4">
+
+    <div class="max-w-md mx-auto">
+        <div class="text-center mb-6 mt-4">
+            <h1 class="text-3xl font-black tracking-tight text-white uppercase">
+                OPC<span class="text-blue-500">INV</span> PRO
+            </h1>
+            <p class="text-slate-400 text-xs uppercase tracking-widest mt-1">Real-Time Stock Manager</p>
+        </div>
+
+        <div id="inventory-list" class="space-y-4 pb-12">
+            </div>
+    </div>
+
+    <script>
+        // Data derived from OPC_Inventory Google Sheet
+        const inventoryData = [
+            { name: "Cassette", initialStock: 16 },
+            { name: "Perfusate", initialStock: 19 }
+        ];
+
+        function getStatus(stock) {
+            // Status logic from design plan
+            if (stock > 10) return { label: "In Stock", color: "text-green-400", bg: "bg-green-400/10" };
+            if (stock > 0) return { label: "Low Stock", color: "text-yellow-400", bg: "bg-yellow-400/10" };
+            return { label: "Out of Stock", color: "text-red-500", bg: "bg-red-500/10" };
+        }
+
+        function updateItem(index) {
+            const usedInput = document.getElementById(`used-${index}`);
+            const usedVal = parseFloat(usedInput.value) || 0;
+            const item = inventoryData[index];
+            
+            const remaining = Math.max(0, item.initialStock - usedVal);
+            const statusInfo = getStatus(remaining);
+
+            // Update UI
+            document.getElementById(`stock-${index}`).innerText = remaining;
+            const statusEl = document.getElementById(`status-${index}`);
+            statusEl.innerText = statusInfo.label;
+            statusEl.className = `px-3 py-1 rounded-full text-[10px] font-bold uppercase ${statusInfo.color} ${statusInfo.bg}`;
+        }
+
+        function renderApp() {
+            const container = document.getElementById('inventory-list');
+            inventoryData.forEach((item, index) => {
+                const statusInfo = getStatus(item.initialStock);
+                container.innerHTML += `
+                    <div class="glass border border-slate-700 rounded-3xl p-5 shadow-xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-white">${item.name}</h3>
+                                <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">Initial: ${item.initialStock} Cases</p>
+                            </div>
+                            <span id="status-${index}" class="px-3 py-1 rounded-full text-[10px] font-bold uppercase ${statusInfo.color} ${statusInfo.bg}">
+                                ${statusInfo.label}
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 items-center">
+                            <div>
+                                <label class="block text-[10px] font
