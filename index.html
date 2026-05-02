@@ -4,37 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <script src="https://cdn.tailwindcss.com"></script>
-    <title>OPC Inventory Sync</title>
+    <title>OPC Inventory Live</title>
     <style>
         .glass { background: rgba(31, 41, 55, 0.8); backdrop-filter: blur(12px); }
-        .saving { pointer-events: none; opacity: 0.5; filter: grayscale(1); }
-        .success-flash { animation: flash 0.5s ease-out; }
-        @keyframes flash {
-            0% { background-color: rgba(34, 197, 94, 0.4); }
-            100% { background-color: transparent; }
-        }
-        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .loading-shimmer { background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-4">
 
     <div class="max-w-md mx-auto">
         <div class="text-center mb-6 mt-4">
-            <h1 class="text-3xl font-black text-white italic tracking-tighter">OPC<span class="text-blue-500">SYNC</span></h1>
-            <p class="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Inventory Terminal</p>
+            <h1 class="text-3xl font-black text-white italic tracking-tighter">OPC<span class="text-blue-500">LIVE</span></h1>
+            <p id="sync-status" class="text-slate-400 text-[10px] uppercase tracking-widest font-bold">Fetching latest data...</p>
         </div>
 
-        <div id="inventory-list" class="space-y-6"></div>
+        <div id="inventory-list" class="space-y-6">
+            <div class="glass h-40 rounded-[2rem] loading-shimmer opacity-20"></div>
+            <div class="glass h-40 rounded-[2rem] loading-shimmer opacity-20"></div>
+        </div>
     </div>
 
     <script>
-        // PASTE YOUR GOOGLE WEB APP URL HERE
-        const scriptURL = 'YOUR_GOOGLE_WEB_APP_URL_HERE';
+        const scriptURL = 'YOUR_NEW_WEB_APP_URL_HERE';
+        let inventoryData = [];
 
-        const inventoryData = [
-            { name: "Cassette", initial: 16 },
-            { name: "Perfusate", initial: 19 }
-        ];
+        async function loadData() {
+            try {
+                const response = await fetch(scriptURL);
+                inventoryData = await response.json();
+                renderApp();
+                document.getElementById('sync-status').innerText = "All Systems Synced";
+                document.getElementById('sync-status').classList.replace('text-slate-400', 'text-green-500');
+            } catch (e) {
+                document.getElementById('sync-status').innerText = "Offline Mode - Check Connection";
+            }
+        }
 
         function getStatus(stock) {
             if (stock > 10) return { label: "In Stock", color: "text-green-400", bg: "bg-green-500/10" };
@@ -43,98 +48,74 @@
         }
 
         async function syncToSheet(index) {
-            const card = document.getElementById(`card-${index}`);
             const addInput = document.getElementById(`add-${index}`);
             const usedInput = document.getElementById(`used-${index}`);
+            const currentStock = parseFloat(document.getElementById(`stock-${index}`).innerText);
             
             const added = parseFloat(addInput.value) || 0;
             const used = parseFloat(usedInput.value) || 0;
-            
-            // Calculate new total based on what is currently displayed as "Live"
-            const currentDisplayStock = parseFloat(document.getElementById(`stock-${index}`).innerText);
-            const newStock = (currentDisplayStock + added) - used;
+            const newTotal = (currentStock + added) - used;
 
-            // Start "Saving" state
-            card.classList.add('saving');
+            document.getElementById(`card-${index}`).style.opacity = "0.5";
             
             try {
-                // Send to Google Sheets
                 await fetch(scriptURL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    body: JSON.stringify({ name: inventoryData[index].name, newStock: newStock })
+                    body: JSON.stringify({ name: inventoryData[index].name, newStock: newTotal })
                 });
                 
-                // 1. Update the "Live" number in the app
-                document.getElementById(`stock-${index}`).innerText = newStock;
-                
-                // 2. Update the status badge
-                const status = getStatus(newStock);
+                // Update Live UI
+                document.getElementById(`stock-${index}`).innerText = newTotal;
+                const status = getStatus(newTotal);
                 const statusEl = document.getElementById(`status-${index}`);
                 statusEl.innerText = status.label;
                 statusEl.className = `px-3 py-1 rounded-full text-[10px] font-bold uppercase ${status.color} ${status.bg} border border-current`;
                 
-                // 3. RESET THE INPUT FIELDS TO EMPTY/ZERO
                 addInput.value = "";
                 usedInput.value = "";
-                
-                // 4. Success Animation
-                card.classList.remove('saving');
-                card.classList.add('success-flash');
-                setTimeout(() => card.classList.remove('success-flash'), 500);
-
-            } catch (error) {
-                alert("Connection failed. Check internet.");
-                card.classList.remove('saving');
+                alert("Sheet Updated Successfully");
+            } catch (e) {
+                alert("Update failed");
+            } finally {
+                document.getElementById(`card-${index}`).style.opacity = "1";
             }
         }
 
         function renderApp() {
             const container = document.getElementById('inventory-list');
+            container.innerHTML = ''; // Clear shimmer
             inventoryData.forEach((item, index) => {
                 const status = getStatus(item.initial);
                 container.innerHTML += `
-                    <div id="card-${index}" class="glass border border-slate-700 rounded-[2rem] p-6 shadow-2xl transition-all duration-300">
+                    <div id="card-${index}" class="glass border border-slate-700 rounded-[2rem] p-6 shadow-2xl">
                         <div class="flex justify-between items-center mb-6">
                             <h3 class="text-2xl font-black text-white uppercase tracking-tight">${item.name}</h3>
                             <span id="status-${index}" class="px-3 py-1 rounded-full text-[10px] font-bold uppercase ${status.color} ${status.bg} border border-current">
                                 ${status.label}
                             </span>
                         </div>
-                        
                         <div class="grid grid-cols-2 gap-4 mb-6">
                             <div class="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
                                 <label class="block text-[10px] font-bold text-blue-400 uppercase mb-2">Restock (+)</label>
-                                <input type="number" id="add-${index}" placeholder="0" 
-                                    class="w-full bg-transparent border-b border-slate-600 text-2xl text-white outline-none focus:border-blue-500 transition-colors">
+                                <input type="number" id="add-${index}" placeholder="0" class="w-full bg-transparent border-b border-slate-600 text-2xl text-white outline-none">
                             </div>
                             <div class="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
                                 <label class="block text-[10px] font-bold text-red-400 uppercase mb-2">Used (-)</label>
-                                <input type="number" id="used-${index}" placeholder="0" 
-                                    class="w-full bg-transparent border-b border-slate-600 text-2xl text-white outline-none focus:border-red-500 transition-colors">
+                                <input type="number" id="used-${index}" placeholder="0" class="w-full bg-transparent border-b border-slate-600 text-2xl text-white outline-none">
                             </div>
                         </div>
-
-                        <button onclick="syncToSheet(${index})" 
-                            class="w-full bg-slate-100 text-slate-900 py-4 rounded-2xl font-black uppercase tracking-widest text-sm mb-6 active:scale-95 transition-transform shadow-lg shadow-white/5">
-                            Update Spreadsheet
-                        </button>
-
-                        <div class="flex justify-between items-end px-1">
-                            <div class="opacity-50">
-                                <p class="text-[9px] font-bold uppercase tracking-widest">Global Status</p>
-                                <p class="text-xs font-bold text-slate-400 uppercase">Synced & Ready</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Current In Stock</p>
-                                <p id="stock-${index}" class="text-5xl font-black text-white leading-none">${item.initial}</p>
-                            </div>
+                        <button onclick="syncToSheet(${index})" class="w-full bg-white text-slate-900 py-4 rounded-2xl font-black uppercase text-sm mb-6 active:scale-95 transition-transform">Update Spreadsheet</button>
+                        <div class="text-right">
+                            <p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Live In Stock</p>
+                            <p id="stock-${index}" class="text-5xl font-black text-white leading-none">${item.initial}</p>
                         </div>
                     </div>
                 `;
             });
         }
-        renderApp();
+        
+        loadData();
     </script>
 </body>
 </html>
